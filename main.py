@@ -137,21 +137,19 @@ async def _handle_client(websocket: WebSocket, key: str) -> None:
         if not game.host_ready.is_set():
             await _send(websocket, {"type": "waiting", "client_id": client_id})
 
-            # Wait for host OR for client to disconnect, whichever comes first
-            wait_task = asyncio.create_task(game.host_ready.wait())
-            recv_task = asyncio.create_task(websocket.receive_text())
-
-            done, pending = await asyncio.wait(
-                {wait_task, recv_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for t in pending:
-                t.cancel()
-
-            if recv_task in done:
-                # Client sent something or disconnected before host arrived
-                game.clients.pop(client_id, None)
-                return
+            # Avoid racing and canceling receive tasks while the host connects.
+            # Poll host_ready with a short timeout and treat any client input/disconnect
+            # before host readiness as an early exit.
+            while not game.host_ready.is_set():
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=0.25)
+                    game.clients.pop(client_id, None)
+                    return
+                except asyncio.TimeoutError:
+                    continue
+                except WebSocketDisconnect:
+                    game.clients.pop(client_id, None)
+                    return
 
             # If the game was removed while waiting (e.g. stale state), bail out
             if key not in _game_registry:
