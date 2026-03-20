@@ -81,11 +81,23 @@ Lifecycle rules:
   "payload": {"ok": true}
 }
 
+### Host -> Relay (broadcast)
+{
+  "type": "broadcast",
+  "payload": {"event": "round_started"}
+}
+
 ### Relay -> Client (forwarded response)
 {
   "type": "rpc_response",
   "message_id": "m-123",
   "payload": {"ok": true}
+}
+
+### Relay -> Clients (forwarded broadcast)
+{
+  "type": "broadcast",
+  "payload": {"event": "round_started"}
 }
 
 ### Error/waiting examples
@@ -119,6 +131,8 @@ Use any WebSocket client tool (for example, websocat or browser code):
 4. Confirm host receives client_id + message_id.
 5. Send host response with same client_id + message_id.
 6. Confirm client receives response.
+7. Send host broadcast message.
+8. Confirm all connected clients receive broadcast.
 
 ## Notes and Caveats
 - State is in memory only. Restarting the process clears all games.

@@ -87,6 +87,17 @@ async def _handle_host(websocket: WebSocket, key: str) -> None:
             except json.JSONDecodeError:
                 continue
 
+            if msg.get("type") == "broadcast":
+                # Fan out host broadcast messages to all currently connected clients.
+                payload = msg.get("payload")
+                clients_snapshot = list(game.clients.values())
+                for client_ws in clients_snapshot:
+                    await _send(client_ws, {
+                        "type": "broadcast",
+                        "payload": payload,
+                    })
+                continue
+
             # Expected from host: {"client_id": "...", "message_id": "...", "payload": {...}}
             client_id = msg.get("client_id")
             if not client_id:
