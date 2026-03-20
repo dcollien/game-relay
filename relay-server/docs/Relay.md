@@ -109,6 +109,39 @@ Each client receives:
   "payload": {"round": 1}
 }
 
+### 4) Binary Frames (Optional)
+Binary WebSocket frames are supported as an optional high-performance transport
+alongside JSON text frames. Existing JSON-only clients work unchanged.
+
+**Host binary frame → Broadcast to all clients**
+
+The host sends a binary WebSocket frame. The relay broadcasts the raw bytes to
+every connected client as a binary frame. No header or framing is added.
+
+**Client binary frame → Forward to host**
+
+A client sends a binary WebSocket frame. The relay prepends a client
+identification header and forwards the combined bytes to the host as a binary
+frame.
+
+Header format:
+```
+[1 byte: length of client_id] [client_id UTF-8 bytes] [original payload]
+```
+
+The host reads the first byte as N, takes the next N bytes as the UTF-8
+client_id, and treats the remainder as the payload.
+
+Notes:
+- Binary and JSON text messages can be freely interleaved on the same connection.
+- Application-level framing within binary payloads is the game's responsibility.
+- Binary frames are subject to the same per-client backpressure as JSON messages.
+
+## Backpressure
+Each client has a bounded outbound message buffer (currently 64 messages).
+If a client cannot keep up with the send rate, the oldest undelivered messages
+are silently dropped. This prevents one slow client from affecting others.
+
 ## Error Messages
 Possible error payload:
 {

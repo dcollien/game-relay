@@ -5,10 +5,18 @@ from fastapi import WebSocket
 
 
 @dataclass
+class ClientConnection:
+    websocket: WebSocket
+    send_queue: asyncio.Queue = field(
+        default_factory=lambda: asyncio.Queue(maxsize=64)
+    )
+
+
+@dataclass
 class Game:
     host: WebSocket | None = None
     host_ready: asyncio.Event = field(default_factory=asyncio.Event)
-    clients: dict[str, WebSocket] = field(default_factory=dict)
+    clients: dict[str, ClientConnection] = field(default_factory=dict)
 
 
 # Keyed by hashed game_code (hex string)

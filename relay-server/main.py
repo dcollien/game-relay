@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from starlette.websockets import WebSocketState
 
 from config import get_target_server, is_local
-from game import game_key, get_or_create_game, remove_game, _games as _game_registry
+from game import game_key, get_or_create_game, remove_game, _games as _game_registry, ClientConnection
 
 app = FastAPI()
 
@@ -19,7 +19,7 @@ app = FastAPI()
 # ---------------------------------------------------------------------------
 
 async def _send(ws: WebSocket, data: dict) -> None:
-    """Send JSON, silently ignoring already-closed sockets."""
+    """Send JSON directly to a websocket (used for host messages)."""
     try:
         if ws.client_state == WebSocketState.CONNECTED:
             await ws.send_text(json.dumps(data))
@@ -33,6 +33,47 @@ async def _close(ws: WebSocket, code: int = 1000, reason: str = "") -> None:
             await ws.close(code=code, reason=reason)
     except Exception:
         pass
+
+
+def _enqueue(conn: ClientConnection, data: dict) -> None:
+    """Enqueue a JSON message for a client. Drops silently if the queue is full."""
+    try:
+        conn.send_queue.put_nowait(json.dumps(data))
+    except asyncio.QueueFull:
+        pass
+
+
+def _enqueue_bytes(conn: ClientConnection, data: bytes) -> None:
+    """Enqueue a binary message for a client. Drops silently if the queue is full."""
+    try:
+        conn.send_queue.put_nowait(data)
+    except asyncio.QueueFull:
+        pass
+
+
+async def _client_sender(conn: ClientConnection) -> None:
+    """Dedicated per-client sender – drains the outbound queue."""
+    try:
+        while True:
+            msg = await conn.send_queue.get()
+            if msg is None:
+                break
+            if conn.websocket.client_state != WebSocketState.CONNECTED:
+                break
+            if isinstance(msg, bytes):
+                await conn.websocket.send_bytes(msg)
+            else:
+                await conn.websocket.send_text(msg)
+    except Exception:
+        pass
+
+
+async def _receive(ws: WebSocket) -> tuple[str | None, bytes | None]:
+    """Receive a text or binary WebSocket frame. Raises WebSocketDisconnect on close."""
+    msg = await ws.receive()
+    if msg["type"] == "websocket.disconnect":
+        raise WebSocketDisconnect(code=msg.get("code", 1000))
+    return msg.get("text"), msg.get("bytes")
 
 
 # ---------------------------------------------------------------------------
@@ -81,33 +122,47 @@ async def _handle_host(websocket: WebSocket, key: str) -> None:
 
     try:
         while True:
-            raw = await websocket.receive_text()
+            text, binary = await _receive(websocket)
+
+            # Binary frame from host → broadcast raw bytes to all clients
+            if binary is not None:
+                clients_snapshot = list(game.clients.values())
+                for conn in clients_snapshot:
+                    _enqueue_bytes(conn, binary)
+                continue
+
+            if text is None:
+                continue
+
             try:
-                msg = json.loads(raw)
+                msg = json.loads(text)
             except json.JSONDecodeError:
                 continue
 
             if msg.get("type") == "broadcast":
-                # Fan out host broadcast messages to all currently connected clients.
+                # Serialize once, enqueue the same string to every client.
+                broadcast_json = json.dumps({
+                    "type": "broadcast",
+                    "name": msg.get("name"),
+                    "payload": msg.get("payload"),
+                })
                 clients_snapshot = list(game.clients.values())
-                for client_ws in clients_snapshot:
-                    await _send(client_ws, {
-                        "type": "broadcast",
-                        "name": msg.get("name"),
-                        "payload": msg.get("payload"),
-                    })
+                for conn in clients_snapshot:
+                    try:
+                        conn.send_queue.put_nowait(broadcast_json)
+                    except asyncio.QueueFull:
+                        pass
                 continue
 
-            # Expected from host: {"client_id": "...", "message_id": "...", "payload": {...}}
             client_id = msg.get("client_id")
             if not client_id:
                 continue
 
-            target_ws = game.clients.get(client_id)
-            if target_ws is None:
+            conn = game.clients.get(client_id)
+            if conn is None:
                 continue  # client already disconnected
 
-            await _send(target_ws, {
+            _enqueue(conn, {
                 "type": "rpc_response",
                 "message_id": msg.get("message_id"),
                 "payload": msg.get("payload"),
@@ -116,12 +171,15 @@ async def _handle_host(websocket: WebSocket, key: str) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        # Tear down the entire game and close all connected clients
         game.host = None
         clients_snapshot = dict(game.clients)
         await remove_game(key)
-        for client_ws in clients_snapshot.values():
-            await _close(client_ws, code=1001, reason="host disconnected")
+        for conn in clients_snapshot.values():
+            try:
+                conn.send_queue.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
+            await _close(conn.websocket, code=1001, reason="host disconnected")
 
 
 # ---------------------------------------------------------------------------
@@ -131,48 +189,55 @@ async def _handle_host(websocket: WebSocket, key: str) -> None:
 async def _handle_client(websocket: WebSocket, key: str) -> None:
     client_id = str(uuid.uuid4())
     game = await get_or_create_game(key)
-    game.clients[client_id] = websocket
+    conn = ClientConnection(websocket=websocket)
+    game.clients[client_id] = conn
+    sender_task = asyncio.create_task(_client_sender(conn))
 
     try:
         if not game.host_ready.is_set():
-            await _send(websocket, {"type": "waiting", "client_id": client_id})
+            _enqueue(conn, {"type": "waiting", "client_id": client_id})
 
-            # Avoid racing and canceling receive tasks while the host connects.
-            # Poll host_ready with a short timeout and treat any client input/disconnect
-            # before host readiness as an early exit.
             while not game.host_ready.is_set():
                 try:
                     await asyncio.wait_for(websocket.receive_text(), timeout=0.25)
-                    game.clients.pop(client_id, None)
                     return
                 except asyncio.TimeoutError:
                     continue
                 except WebSocketDisconnect:
-                    game.clients.pop(client_id, None)
                     return
 
-            # If the game was removed while waiting (e.g. stale state), bail out
             if key not in _game_registry:
-                await _send(websocket, {"type": "error", "message": "game ended"})
-                await _close(websocket, code=1001)
-                game.clients.pop(client_id, None)
+                _enqueue(conn, {"type": "error", "message": "game ended"})
                 return
 
-        await _send(websocket, {"type": "connected", "client_id": client_id})
+        _enqueue(conn, {"type": "connected", "client_id": client_id})
 
         while True:
-            raw = await websocket.receive_text()
+            text, binary = await _receive(websocket)
+
+            # Binary frame from client → forward to host with client_id header
+            if binary is not None:
+                if game.host is not None and game.host.client_state == WebSocketState.CONNECTED:
+                    cid = client_id.encode()
+                    try:
+                        await game.host.send_bytes(bytes([len(cid)]) + cid + binary)
+                    except Exception:
+                        pass
+                continue
+
+            if text is None:
+                continue
+
             try:
-                msg = json.loads(raw)
+                msg = json.loads(text)
             except json.JSONDecodeError:
                 continue
 
             if game.host is None:
-                await _send(websocket, {"type": "error", "message": "host not available"})
+                _enqueue(conn, {"type": "error", "message": "host not available"})
                 continue
 
             if msg.get("type") == "command":
-                # Forward one-way command to host, injecting client_id.
                 await _send(game.host, {
                     "type": "command",
                     "client_id": client_id,
@@ -181,7 +246,6 @@ async def _handle_client(websocket: WebSocket, key: str) -> None:
                 })
                 continue
 
-            # Forward RPC call to host, injecting client_id
             await _send(game.host, {
                 "type": "rpc_request",
                 "client_id": client_id,
@@ -194,6 +258,15 @@ async def _handle_client(websocket: WebSocket, key: str) -> None:
         pass
     finally:
         game.clients.pop(client_id, None)
+        try:
+            conn.send_queue.put_nowait(None)
+        except asyncio.QueueFull:
+            pass
+        sender_task.cancel()
+        try:
+            await sender_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 def run() -> None:
