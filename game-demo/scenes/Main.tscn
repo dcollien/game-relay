@@ -1,0 +1,157 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game.gd" id="1_script"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+text = "Dot Collector — Relay Demo"
+horizontal_alignment = 1
+
+[node name="ConnectionRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RelayUrlInput" type="LineEdit" parent="Panel/MarginContainer/VBox/ConnectionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "wss://constult-us-game-relay.hf.space/connect"
+
+[node name="GameCodeInput" type="LineEdit" parent="Panel/MarginContainer/VBox/ConnectionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(130, 0)
+placeholder_text = "Game code"
+
+[node name="RoleButtons" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlaySoloButton" type="Button" parent="Panel/MarginContainer/VBox/RoleButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Play Solo"
+
+[node name="ConnectHostButton" type="Button" parent="Panel/MarginContainer/VBox/RoleButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Connect as Host"
+
+[node name="ConnectClientButton" type="Button" parent="Panel/MarginContainer/VBox/RoleButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Connect as Client"
+
+[node name="DisconnectButton" type="Button" parent="Panel/MarginContainer/VBox/RoleButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Disconnect"
+
+[node name="AddAICheck" type="CheckBox" parent="Panel/MarginContainer/VBox/RoleButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add AI"
+
+[node name="StatusRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBox/StatusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Status: disconnected"
+
+[node name="RoleLabel" type="Label" parent="Panel/MarginContainer/VBox/StatusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Role: none"
+
+[node name="CounterLabel" type="Label" parent="Panel/MarginContainer/VBox/StatusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Remaining: 100"
+
+[node name="Actions" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="IncrementButton" type="Button" parent="Panel/MarginContainer/VBox/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Show Leaderboard"
+
+[node name="SyncButton" type="Button" parent="Panel/MarginContainer/VBox/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Sync Board (RPC)"
+
+[node name="MainBody" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="GameContent" type="VBoxContainer" parent="Panel/MarginContainer/VBox/MainBody"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+alignment = 1
+
+[node name="LogPanel" type="VBoxContainer" parent="Panel/MarginContainer/VBox/MainBody"]
+layout_mode = 2
+custom_minimum_size = Vector2(300, 0)
+
+[node name="LogLabel" type="Label" parent="Panel/MarginContainer/VBox/MainBody/LogPanel"]
+layout_mode = 2
+text = "Debug Log"
+
+[node name="LogOutput" type="RichTextLabel" parent="Panel/MarginContainer/VBox/MainBody/LogPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_following = true
