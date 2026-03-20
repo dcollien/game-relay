@@ -1,62 +1,48 @@
-# Relay Server
+# Relay Protocol
 
 ## Purpose
-The relay server lets one host and many clients communicate over WebSocket for a given game code.
+This document describes how external software should communicate with the relay service over WebSocket.
 
-Each game code is deterministically routed to one server instance. If a client connects to the wrong instance, that instance returns an HTTP 307 redirect to the correct server URL.
+Use this as a protocol contract between:
+- a single host for a game code
+- one or more clients for the same game code
 
-## Stack
-- FastAPI
-- Uvicorn
-- uv
-- In-memory game registry
-
-## Endpoint
-- WebSocket route: /connect/{game_code}/{mode}
+## Endpoint Contract
+- WebSocket path: /connect/{game_code}/{mode}
 - mode values:
   - host
   - client
 
-## Routing Model
-1. The server hashes game_code with SHA-256.
-2. It maps the hash to an index in servers.json.
-3. If mapped server != SERVER_URL, the request is denied with HTTP 307 redirect to the mapped server.
-4. If mapped server == SERVER_URL, the WebSocket is accepted.
+Example paths:
+- /connect/ABC123/host
+- /connect/ABC123/client
 
-Configuration source:
-- servers.json: list of known server base URLs (for example, http://localhost:8001)
-- env SERVER_URL: this instance's public/base URL
+## Session Behavior
+- There is at most one active host per game_code.
+- Clients may connect before the host.
+- Messages are JSON objects.
 
-## Game Lifecycle
-Per game code, the server maintains one in-memory game object with:
-- host socket (at most one)
-- host-ready event
-- clients dictionary keyed by client_id
+## Handshake Messages
+### Host connected
+{
+  "type": "connected"
+}
 
-Lifecycle rules:
-- Only one host can connect per game.
-- Clients may connect before host; they are told to wait.
-- When host disconnects, the game is removed and all clients are closed.
+### Client waiting for host
+{
+  "type": "waiting",
+  "client_id": "uuid"
+}
 
-## Connection Flow
-### Host mode
-1. Connect to /connect/{game_code}/host.
-2. If host already exists: receive error message, then close.
-3. If accepted: receive
-   - {"type":"connected"}
-4. Host then receives forwarded client RPC calls and replies back to specific client_id.
+### Client connected
+{
+  "type": "connected",
+  "client_id": "uuid"
+}
 
-### Client mode
-1. Connect to /connect/{game_code}/client.
-2. Server assigns a UUID client_id.
-3. If host is not ready yet: receive
-   - {"type":"waiting","client_id":"..."}
-4. Once host is ready: receive
-   - {"type":"connected","client_id":"..."}
-5. Client can send RPC messages to host.
-
-## Message Formats
-### Client -> Relay (RPC request)
+## Message Types
+### 1) Request/Response RPC
+Client sends an RPC request:
 {
   "type": "rpc_request",
   "message_id": "m-123",
@@ -64,14 +50,7 @@ Lifecycle rules:
   "payload": {"x": 1, "y": 2}
 }
 
-### Client -> Relay (command)
-{
-  "type": "command",
-  "name": "spawn_enemy",
-  "payload": {"kind": "orc"}
-}
-
-### Relay -> Host (forwarded request)
+Host receives forwarded RPC request:
 {
   "type": "rpc_request",
   "client_id": "uuid",
@@ -80,7 +59,30 @@ Lifecycle rules:
   "payload": {"x": 1, "y": 2}
 }
 
-### Relay -> Host (forwarded command)
+Host sends RPC response:
+{
+  "type": "rpc_response",
+  "client_id": "uuid",
+  "message_id": "m-123",
+  "payload": {"ok": true}
+}
+
+Client receives RPC response:
+{
+  "type": "rpc_response",
+  "message_id": "m-123",
+  "payload": {"ok": true}
+}
+
+### 2) One-way Command (Client -> Host)
+Client sends one-way command:
+{
+  "type": "command",
+  "name": "spawn_enemy",
+  "payload": {"kind": "orc"}
+}
+
+Host receives forwarded command:
 {
   "type": "command",
   "client_id": "uuid",
@@ -88,73 +90,39 @@ Lifecycle rules:
   "payload": {"kind": "orc"}
 }
 
-### Host -> Relay (RPC response)
-{
-  "type": "rpc_response",
-  "client_id": "uuid",
-  "message_id": "m-123",
-  "payload": {"ok": true}
-}
+Notes:
+- command has no message_id.
+- command has no required response.
 
-### Host -> Relay (broadcast)
+### 3) Broadcast (Host -> All Clients)
+Host sends broadcast:
 {
   "type": "broadcast",
   "name": "round_started",
   "payload": {"round": 1}
 }
 
-### Relay -> Client (forwarded response)
-{
-  "type": "rpc_response",
-  "message_id": "m-123",
-  "payload": {"ok": true}
-}
-
-### Relay -> Clients (forwarded broadcast)
+Each client receives:
 {
   "type": "broadcast",
   "name": "round_started",
   "payload": {"round": 1}
 }
 
-### Error/waiting examples
-- {"type":"error","message":"game already has a host"}
-- {"type":"error","message":"host not available"}
-- {"type":"error","message":"game ended"}
-- {"type":"waiting","client_id":"uuid"}
-- {"type":"connected","client_id":"uuid"}
+## Error Messages
+Possible error payload:
+{
+  "type": "error",
+  "message": "..."
+}
 
-## Running
-From project root:
+Common error cases include:
+- host already exists for that game_code
+- host not available
+- game ended
 
-1) Set servers.json (single-node local example):
-[
-  "http://localhost:8001"
-]
-
-2) Start server:
-SERVER_URL=http://localhost:8001 PORT=8001 uv run game-relay
-
-Optional env vars:
-- HOST (default: 0.0.0.0)
-- PORT (default: 8001)
-- SERVER_URL (default: first entry in servers.json)
-
-## Local Test Idea
-Use any WebSocket client tool (for example, websocat or browser code):
-1. Open host socket to /connect/ABC123/host.
-2. Open client socket to /connect/ABC123/client.
-3. Send client RPC request.
-4. Confirm host receives client_id + message_id.
-5. Send host response with same client_id + message_id.
-6. Confirm client receives response.
-7. Send host broadcast message.
-8. Confirm all connected clients receive broadcast.
-9. Send client command message.
-10. Confirm host receives command with client_id, name, and payload.
-
-## Notes and Caveats
-- State is in memory only. Restarting the process clears all games.
-- No authentication/authorization is currently implemented.
-- No persistence, sharding, or external pub/sub is used.
-- During waiting state, client should wait for connected before sending RPC messages.
+## Client/Host Recommendations
+- Treat message payload as application-defined.
+- Use unique message_id values for RPC correlation.
+- Wait for connected before sending gameplay messages.
+- Handle disconnects and reconnect with a fresh socket.
