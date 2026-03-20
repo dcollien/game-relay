@@ -173,6 +173,16 @@ async def _handle_client(websocket: WebSocket, key: str) -> None:
                 await _send(websocket, {"type": "error", "message": "host not available"})
                 continue
 
+            if msg.get("type") == "command":
+                # Forward one-way command to host, injecting client_id.
+                await _send(game.host, {
+                    "type": "command",
+                    "client_id": client_id,
+                    "name": msg.get("name"),
+                    "payload": msg.get("payload"),
+                })
+                continue
+
             # Forward RPC call to host, injecting client_id
             await _send(game.host, {
                 "type": "rpc_request",

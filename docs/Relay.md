@@ -64,6 +64,13 @@ Lifecycle rules:
   "payload": {"x": 1, "y": 2}
 }
 
+### Client -> Relay (command)
+{
+  "type": "command",
+  "name": "spawn_enemy",
+  "payload": {"kind": "orc"}
+}
+
 ### Relay -> Host (forwarded request)
 {
   "type": "rpc_request",
@@ -71,6 +78,14 @@ Lifecycle rules:
   "message_id": "m-123",
   "name": "move",
   "payload": {"x": 1, "y": 2}
+}
+
+### Relay -> Host (forwarded command)
+{
+  "type": "command",
+  "client_id": "uuid",
+  "name": "spawn_enemy",
+  "payload": {"kind": "orc"}
 }
 
 ### Host -> Relay (RPC response)
@@ -135,6 +150,8 @@ Use any WebSocket client tool (for example, websocat or browser code):
 6. Confirm client receives response.
 7. Send host broadcast message.
 8. Confirm all connected clients receive broadcast.
+9. Send client command message.
+10. Confirm host receives command with client_id, name, and payload.
 
 ## Notes and Caveats
 - State is in memory only. Restarting the process clears all games.
