@@ -84,7 +84,8 @@ Lifecycle rules:
 ### Host -> Relay (broadcast)
 {
   "type": "broadcast",
-  "payload": {"event": "round_started"}
+  "name": "round_started",
+  "payload": {"round": 1}
 }
 
 ### Relay -> Client (forwarded response)
@@ -97,7 +98,8 @@ Lifecycle rules:
 ### Relay -> Clients (forwarded broadcast)
 {
   "type": "broadcast",
-  "payload": {"event": "round_started"}
+  "name": "round_started",
+  "payload": {"round": 1}
 }
 
 ### Error/waiting examples

@@ -89,12 +89,12 @@ async def _handle_host(websocket: WebSocket, key: str) -> None:
 
             if msg.get("type") == "broadcast":
                 # Fan out host broadcast messages to all currently connected clients.
-                payload = msg.get("payload")
                 clients_snapshot = list(game.clients.values())
                 for client_ws in clients_snapshot:
                     await _send(client_ws, {
                         "type": "broadcast",
-                        "payload": payload,
+                        "name": msg.get("name"),
+                        "payload": msg.get("payload"),
                     })
                 continue
 
