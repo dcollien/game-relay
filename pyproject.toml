@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "game-relay"
+version = "0.1.0"
+description = "Game relay server"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.135.1",
+    "uvicorn[standard]>=0.42.0",
+]
+
+[project.scripts]
+game-relay = "main:run"
+
+[tool.setuptools]
+py-modules = ["main", "config", "game"]
