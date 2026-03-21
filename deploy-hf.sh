@@ -22,4 +22,7 @@ if [ ! -d "$PREFIX" ]; then
 fi
 
 echo "Deploying '$PREFIX/' to '$REMOTE/$BRANCH' via git subtree..."
-git subtree push --prefix "$PREFIX" "$REMOTE" "$BRANCH"
+git branch -D _hf_deploy 2>/dev/null || true
+git subtree split --prefix "$PREFIX" -b _hf_deploy
+git push --force "$REMOTE" "_hf_deploy:$BRANCH"
+git branch -D _hf_deploy
