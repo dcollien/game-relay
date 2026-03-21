@@ -45,7 +45,7 @@ var marker_sequence: int = 0
 
 func _ready() -> void:
 	_build_grid_ui()
-	relay_url_input.text = "wss://constult-us-game-relay.hf.space/connect"
+	relay_url_input.text = "wss://relay.constult.us/connect"
 	game_code_input.text = "ABC123"
 	play_solo_button.pressed.connect(_on_play_solo)
 	connect_host_button.pressed.connect(_on_connect_host)

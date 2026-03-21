@@ -112,9 +112,13 @@ async def _handle_host(websocket: WebSocket, key: str) -> None:
     game = await get_or_create_game(key)
 
     if game.host is not None:
-        await _send(websocket, {"type": "error", "message": "game already has a host"})
-        await _close(websocket, code=1008, reason="game already has a host")
-        return
+        if game.host.client_state != WebSocketState.CONNECTED:
+            # Stale host — WebSocket died without clean disconnect
+            game.host = None
+        else:
+            await _send(websocket, {"type": "error", "message": "A game with this code is already in progress"})
+            await _close(websocket, code=1008, reason="A game with this code is already in progress")
+            return
 
     game.host = websocket
     game.host_ready.set()

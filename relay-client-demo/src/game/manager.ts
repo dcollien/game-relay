@@ -12,7 +12,7 @@ export function createManager(
   game: Game,
   relayUrl: string,
   gameCode: string,
-  callbacks?: { onDisconnected?: () => void },
+  callbacks?: { onDisconnected?: () => void; onError?: (msg: string) => void },
   binary = false,
 ) {
   const pickupBuffer: PendingPickup[] = [];
@@ -74,6 +74,7 @@ export function createManager(
 
     onError(msg) {
       console.error("[manager]", msg);
+      callbacks?.onError?.(msg);
     },
   });
 

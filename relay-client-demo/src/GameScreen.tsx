@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { Role } from "./App";
 import { drawGame, drawScoreboard } from "./game/renderer";
 import { CANVAS_W, CANVAS_H } from "./game/state";
@@ -12,13 +12,17 @@ interface Props {
   gameCode: string;
   playerName: string;
   binary: boolean;
-  onBack: () => void;
+  onBack: (errorMsg?: string) => void;
 }
 
 export function GameScreen({ role, relayUrl, gameCode, playerName, binary, onBack }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showScoreboard, setShowScoreboard] = useKeyToggle("Tab");
-  const { player, status } = useGameSession(role, relayUrl, gameCode, playerName, binary);
+  const { player, status, error } = useGameSession(role, relayUrl, gameCode, playerName, binary);
+
+  useEffect(() => {
+    if (error) onBack(error);
+  }, [error, onBack]);
 
   useRenderLoop(canvasRef, (ctx) => {
     const view = player.current?.view;
@@ -30,7 +34,7 @@ export function GameScreen({ role, relayUrl, gameCode, playerName, binary, onBac
   return (
     <div style={styles.wrapper}>
       <div style={styles.topBar}>
-        <button style={styles.backBtn} onClick={onBack}>← Leave</button>
+        <button style={styles.backBtn} onClick={() => onBack()}>← Leave</button>
         <span style={styles.code}>{gameCode}</span>
         {status && <span style={styles.status}>{status}</span>}
         <button

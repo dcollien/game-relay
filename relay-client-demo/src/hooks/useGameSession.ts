@@ -13,8 +13,7 @@ export function useGameSession(role: Role, relayUrl: string, gameCode: string, p
   const playerRef = useRef<PlayerHandle | null>(null);
   const [status, setStatus] = useState(
     role === "host" ? "Connecting as host…" : "Connecting…",
-  );
-
+  );  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let player: PlayerHandle;
     let mgr: ReturnType<typeof createManager> | null = null;
@@ -39,6 +38,7 @@ export function useGameSession(role: Role, relayUrl: string, gameCode: string, p
 
       mgr = createManager(game, relayUrl, gameCode, {
         onDisconnected() { setStatus("Host disconnected"); },
+        onError(msg) { setError(msg); },
       }, binary);
 
       tickTimer = setInterval(() => {
@@ -104,7 +104,7 @@ export function useGameSession(role: Role, relayUrl: string, gameCode: string, p
           player.detach();
           setStatus("Disconnected");
         },
-        onError(msg) { console.error("[client]", msg); },
+        onError(msg) { console.error("[client]", msg); setError(msg); },
       });
 
       closeTransport = () => client.close();
@@ -122,5 +122,5 @@ export function useGameSession(role: Role, relayUrl: string, gameCode: string, p
     };
   }, [role, relayUrl, gameCode, playerName, binary]);
 
-  return { player: playerRef, status };
+  return { player: playerRef, status, error };
 }

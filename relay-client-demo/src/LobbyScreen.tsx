@@ -1,14 +1,15 @@
 import { useState } from "react";
 import type { Role } from "./App";
 
-const DEFAULT_URL = "wss://constult-us-game-relay.hf.space/connect";
+const DEFAULT_URL = "wss://relay.constult.us/connect";
 const DEFAULT_CODE = "CIRCLES";
 
 interface Props {
+  error: string | null;
   onStart: (role: Role, url: string, code: string, playerName: string, binary: boolean) => void;
 }
 
-export function LobbyScreen({ onStart }: Props) {
+export function LobbyScreen({ error, onStart }: Props) {
   const [url, setUrl] = useState(DEFAULT_URL);
   const [code, setCode] = useState(DEFAULT_CODE);
   const [playerName, setPlayerName] = useState("");
@@ -17,6 +18,7 @@ export function LobbyScreen({ onStart }: Props) {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>Circles</h1>
+      {error && <p style={styles.error}>{error}</p>}
       <p style={styles.sub}>Drop circles. Pick up others&rsquo; circles. Score points.</p>
 
       <label style={styles.label}>
@@ -89,4 +91,5 @@ const styles: Record<string, React.CSSProperties> = {
   hostBtn: { background: "#e74c3c", color: "#fff" },
   joinBtn: { background: "#3498db", color: "#fff" },
   hint: { color: "#666", fontSize: 12, textAlign: "center", marginTop: 12, lineHeight: 1.6 },
+  error: { color: "#e74c3c", fontSize: 14, textAlign: "center", margin: 0 },
 };

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { LobbyScreen } from "./LobbyScreen";
 import { GameScreen } from "./GameScreen";
 
@@ -6,11 +6,17 @@ export type Role = "host" | "client";
 
 export function App() {
   const [session, setSession] = useState<{ role: Role; url: string; code: string; playerName: string; binary: boolean } | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
+  const handleBack = useCallback((errorMsg?: string) => {
+    setSession(null);
+    if (errorMsg) setLastError(errorMsg);
+  }, []);
+
   if (!session) {
-    return <LobbyScreen onStart={(role, url, code, playerName, binary) => setSession({ role, url, code, playerName, binary })} />;
+    return <LobbyScreen error={lastError} onStart={(role, url, code, playerName, binary) => { setLastError(null); setSession({ role, url, code, playerName, binary }); }} />;
   }
 
   return (
@@ -20,7 +26,7 @@ export function App() {
       gameCode={session.code}
       playerName={session.playerName}
       binary={session.binary}
-      onBack={() => setSession(null)}
+      onBack={handleBack}
     />
   );
 }
